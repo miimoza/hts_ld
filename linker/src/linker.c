@@ -10,49 +10,9 @@
 
 void ld(char *executable_name, char *object_path)
 {
-    printf("executable:%s\n", executable_name);
-    printf("objet:%s\n", object_path);
-
     struct ELF_Info *object_ELFI = load_object(object_path);
     struct ELF_Info *executable_ELFI = get_executable(object_ELFI);
     write_executable(executable_name, executable_ELFI);
-
-}
-
-
-struct ELF_Info *get_executable(struct ELF_Info *object_ELFI)
-{
-    struct ELF_Info *executable_ELFI = malloc(sizeof(struct ELF_Info));
-
-    struct ELF *executable_ELF = malloc(object_ELFI->size + sizeof(ElfW(Phdr)));
-    memcpy(executable_ELF, object_ELFI->ELF, object_ELFI->size);
-
-    executable_ELFI->ELF = executable_ELF;
-    executable_ELFI->size = object_ELFI->size + sizeof(ElfW(Phdr));
-
-    printf("type:%d\n", executable_ELF->ehdr.e_type);
-
-    // SET TYPE TO EXECUTABLE (2)
-    executable_ELF->ehdr.e_type = ET_EXEC;
-
-    // SET PROGRAM HEADER START TO THE END OF THE FILE
-    executable_ELF->ehdr.e_phoff = executable_ELFI->size;
-
-    // SET PROGRAM HEADER SIZE OF SECTIONS
-    executable_ELF->ehdr.e_phentsize = 8;
-
-    // SET PROGRAM HEADER NUMBER OF SECTIONS
-    executable_ELF->ehdr.e_phnum = 8;
-
-    printf("type:%d\n", executable_ELF->ehdr.e_type);
-
-    return executable_ELFI;
-}
-
-void write_executable(char *executable_name, struct ELF_Info *executable_ELFI)
-{
-    int fd = open(executable_name, O_WRONLY | O_APPEND | O_CREAT, 0755);
-    write(fd, executable_ELFI->ELF, executable_ELFI->size);
 }
 
 struct ELF_Info *load_object(char *path)
@@ -64,14 +24,68 @@ struct ELF_Info *load_object(char *path)
     object_ELFI->size = stat_buffer.st_size;
 
     int fd = open(path, O_RDONLY);
-    void *map = mmap(0, stat_buffer.st_size,
-        PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE, fd, 0);
+    object_ELFI->ELF = mmap(0, stat_buffer.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
     close(fd);
-
-    object_ELFI->ELF = map;
 
     return object_ELFI;
 }
+
+struct ELF_Info *get_executable(struct ELF_Info *object_ELFI)
+{
+    struct ELF_Info *executable_ELFI = malloc(sizeof(struct ELF_Info));
+
+    executable_ELFI->ELF = malloc(object_ELFI->size + sizeof(ElfW(Phdr)));
+    memcpy(executable_ELFI->ELF, object_ELFI->ELF, object_ELFI->size);
+
+    executable_ELFI->size = object_ELFI->size + sizeof(ElfW(Phdr));
+
+    update_header(executable_ELFI);
+    update_section_header(executable_ELFI);
+    insert_program_header(executable_ELFI);
+
+    return executable_ELFI;
+}
+
+void update_header(struct ELF_Info *executable_ELFI)
+{
+    // SET TYPE TO EXECUTABLE (2)
+    executable_ELFI->ELF->ehdr.e_type = ET_EXEC;
+
+    // SET PROGRAM HEADER START TO THE END OF THE FILE
+    executable_ELFI->ELF->ehdr.e_phoff = executable_ELFI->size;
+
+    // SET PROGRAM HEADER SIZE OF SECTIONS
+    executable_ELFI->ELF->ehdr.e_phentsize = 8;
+
+    // SET PROGRAM HEADER NUMBER OF SECTIONS
+    executable_ELFI->ELF->ehdr.e_phnum = 8;
+
+    // SET THE ENTRY POINT OF THE FUNCTION _START
+    executable_ELFI->ELF->ehdr.e_entry = get_entry_point(executable_ELFI);
+}
+
+size_t get_entry_point(struct ELF_Info *executable_ELFI)
+{
+    return 12;
+}
+
+void update_section_header(struct ELF_Info *executable_ELFI)
+{
+
+}
+
+void insert_program_header(struct ELF_Info *executable_ELFI)
+{
+
+}
+
+void write_executable(char *executable_name, struct ELF_Info *executable_ELFI)
+{
+    int fd = open(executable_name, O_WRONLY | O_APPEND | O_CREAT, 0755);
+    write(fd, executable_ELFI->ELF, executable_ELFI->size);
+}
+
+
 
 void unload_ELF(struct ELF_Info *ELFI)
 {
